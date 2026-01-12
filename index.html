@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sokoban — Push the Crates</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f5f7;
+      --panel: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --accent: #4a6cf7;
+      --wall: #2f2f35;
+      --floor: #e5e7eb;
+      --goal: #fcd34d;
+      --crate: #b45309;
+      --player: #10b981;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    .game-shell {
+      background: var(--panel);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 24px 45px rgba(15, 23, 42, 0.12);
+      max-width: 960px;
+      width: min(100%, 960px);
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(300px, 2fr);
+      gap: 24px;
+    }
+
+    header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 3vw, 38px);
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .panel {
+      background: #f8fafc;
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 12px 14px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 6px 16px rgba(74, 108, 247, 0.32);
+    }
+
+    .secondary {
+      background: white;
+      border: 1px solid #e5e7eb;
+    }
+
+    .hint {
+      font-size: 14px;
+      color: var(--muted);
+      background: #eef2ff;
+      padding: 12px;
+      border-radius: 12px;
+    }
+
+    .board-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .board {
+      display: grid;
+      gap: 4px;
+      background: #dfe3ea;
+      padding: 10px;
+      border-radius: 16px;
+    }
+
+    .tile {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      font-size: 20px;
+    }
+
+    .floor {
+      background: var(--floor);
+    }
+
+    .wall {
+      background: var(--wall);
+    }
+
+    .goal::after {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(252, 211, 77, 0.7);
+      box-shadow: 0 0 0 6px rgba(252, 211, 77, 0.3);
+    }
+
+    .crate::after {
+      content: "";
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      background: var(--crate);
+      box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.15);
+    }
+
+    .crate.goal::after {
+      background: #f59e0b;
+      box-shadow: 0 0 0 4px rgba(252, 211, 77, 0.6);
+    }
+
+    .player::after {
+      content: "";
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--player);
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2);
+    }
+
+    .status {
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .status strong {
+      color: var(--accent);
+    }
+
+    .message {
+      font-weight: 600;
+      color: #047857;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .message.show {
+      opacity: 1;
+    }
+
+    .pad {
+      display: grid;
+      grid-template-columns: repeat(3, 64px);
+      grid-template-rows: repeat(3, 64px);
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .pad button {
+      padding: 0;
+      font-size: 22px;
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+    }
+
+    .pad button:active {
+      transform: scale(0.98);
+    }
+
+    .pad .blank {
+      visibility: hidden;
+    }
+
+    @media (max-width: 820px) {
+      .game-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .board {
+        transform: scale(0.95);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="game-shell">
+    <section>
+      <header>
+        <h1>Sokoban</h1>
+        <p class="subtitle">
+          Push every crate onto its goal. Use your keyboard arrows or WASD. Hit undo if you mis-push.
+        </p>
+      </header>
+
+      <div class="panel">
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-label">Moves</div>
+            <div class="stat-value" id="moves">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pushes</div>
+            <div class="stat-value" id="pushes">0</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="primary" id="reset">Reset Level</button>
+          <button class="secondary" id="undo">Undo Move</button>
+        </div>
+
+        <div class="hint">
+          Pro tip: crates on goals glow. Solve the puzzle in as few moves as possible.
+        </div>
+
+        <div class="status">
+          Goals covered: <strong id="goals">0</strong> / <strong id="goal-total">0</strong>
+        </div>
+        <div class="message" id="message">Puzzle solved! 🎉</div>
+      </div>
+    </section>
+
+    <section class="board-wrapper">
+      <div class="board" id="board" aria-label="Sokoban board" role="grid"></div>
+      <div class="status">Level 1 — Warehouse Warmup</div>
+      <div class="pad" aria-label="On-screen movement controls">
+        <button class="blank" aria-hidden="true"></button>
+        <button data-move="up" aria-label="Move up">⬆️</button>
+        <button class="blank" aria-hidden="true"></button>
+        <button data-move="left" aria-label="Move left">⬅️</button>
+        <button class="blank" aria-hidden="true"></button>
+        <button data-move="right" aria-label="Move right">➡️</button>
+        <button class="blank" aria-hidden="true"></button>
+        <button data-move="down" aria-label="Move down">⬇️</button>
+        <button class="blank" aria-hidden="true"></button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const rawLevel = [
+      "###########",
+      "#    .    #",
+      "#  $$.$   #",
+      "#  #  #   #",
+      "#  .@ .   #",
+      "#   $$   #",
+      "#    .   #",
+      "###########"
+    ];
+
+    const Tile = {
+      WALL: "#",
+      FLOOR: " ",
+      GOAL: ".",
+      CRATE: "$",
+      PLAYER: "@"
+    };
+
+    let state = {};
+    const history = [];
+
+    const board = document.getElementById("board");
+    const movesEl = document.getElementById("moves");
+    const pushesEl = document.getElementById("pushes");
+    const goalsEl = document.getElementById("goals");
+    const goalTotalEl = document.getElementById("goal-total");
+    const messageEl = document.getElementById("message");
+    const directionMap = {
+      up: { dx: 0, dy: -1 },
+      down: { dx: 0, dy: 1 },
+      left: { dx: -1, dy: 0 },
+      right: { dx: 1, dy: 0 }
+    };
+
+    function parseLevel(level) {
+      const walls = [];
+      const goals = new Set();
+      const crates = new Set();
+      let player = { x: 0, y: 0 };
+
+      level.forEach((row, y) => {
+        [...row].forEach((cell, x) => {
+          if (cell === Tile.WALL) {
+            walls.push({ x, y });
+          }
+          if (cell === Tile.GOAL) {
+            goals.add(`${x},${y}`);
+          }
+          if (cell === Tile.CRATE) {
+            crates.add(`${x},${y}`);
+          }
+          if (cell === Tile.PLAYER) {
+            player = { x, y };
+          }
+        });
+      });
+
+      return {
+        width: level[0].length,
+        height: level.length,
+        walls: new Set(walls.map((w) => `${w.x},${w.y}`)),
+        goals,
+        crates,
+        player,
+        moves: 0,
+        pushes: 0
+      };
+    }
+
+    function resetState() {
+      state = parseLevel(rawLevel);
+      history.length = 0;
+      messageEl.classList.remove("show");
+      render();
+    }
+
+    function setBoardGrid() {
+      board.style.gridTemplateColumns = `repeat(${state.width}, 44px)`;
+      board.style.gridTemplateRows = `repeat(${state.height}, 44px)`;
+    }
+
+    function snapshot() {
+      history.push({
+        crates: new Set(state.crates),
+        player: { ...state.player },
+        moves: state.moves,
+        pushes: state.pushes
+      });
+    }
+
+    function undo() {
+      const previous = history.pop();
+      if (!previous) {
+        return;
+      }
+      state.crates = new Set(previous.crates);
+      state.player = { ...previous.player };
+      state.moves = previous.moves;
+      state.pushes = previous.pushes;
+      messageEl.classList.remove("show");
+      render();
+    }
+
+    function movePlayer(dx, dy) {
+      const target = { x: state.player.x + dx, y: state.player.y + dy };
+      const targetKey = `${target.x},${target.y}`;
+
+      if (state.walls.has(targetKey)) {
+        return;
+      }
+
+      const hasCrate = state.crates.has(targetKey);
+      if (hasCrate) {
+        const beyond = { x: target.x + dx, y: target.y + dy };
+        const beyondKey = `${beyond.x},${beyond.y}`;
+        if (state.walls.has(beyondKey) || state.crates.has(beyondKey)) {
+          return;
+        }
+        snapshot();
+        state.crates.delete(targetKey);
+        state.crates.add(beyondKey);
+        state.player = target;
+        state.moves += 1;
+        state.pushes += 1;
+        render();
+        return;
+      }
+
+      snapshot();
+      state.player = target;
+      state.moves += 1;
+      render();
+    }
+
+    function handleMove(direction) {
+      const vector = directionMap[direction];
+      if (!vector) {
+        return;
+      }
+      movePlayer(vector.dx, vector.dy);
+    }
+
+    function countGoalsCovered() {
+      let covered = 0;
+      state.goals.forEach((goal) => {
+        if (state.crates.has(goal)) {
+          covered += 1;
+        }
+      });
+      return covered;
+    }
+
+    function render() {
+      setBoardGrid();
+      board.innerHTML = "";
+
+      for (let y = 0; y < state.height; y += 1) {
+        for (let x = 0; x < state.width; x += 1) {
+          const key = `${x},${y}`;
+          const tile = document.createElement("div");
+          tile.classList.add("tile");
+
+          if (state.walls.has(key)) {
+            tile.classList.add("wall");
+          } else {
+            tile.classList.add("floor");
+            if (state.goals.has(key)) {
+              tile.classList.add("goal");
+            }
+            if (state.crates.has(key)) {
+              tile.classList.add("crate");
+            }
+            if (state.player.x === x && state.player.y === y) {
+              tile.classList.add("player");
+            }
+          }
+
+          board.appendChild(tile);
+        }
+      }
+
+      movesEl.textContent = state.moves;
+      pushesEl.textContent = state.pushes;
+      goalsEl.textContent = countGoalsCovered();
+      goalTotalEl.textContent = state.goals.size;
+
+      if (countGoalsCovered() === state.goals.size) {
+        messageEl.classList.add("show");
+      } else {
+        messageEl.classList.remove("show");
+      }
+    }
+
+    document.addEventListener("keydown", (event) => {
+      const key = event.key.toLowerCase();
+      if (["arrowup", "w"].includes(key)) {
+        handleMove("up");
+      } else if (["arrowdown", "s"].includes(key)) {
+        handleMove("down");
+      } else if (["arrowleft", "a"].includes(key)) {
+        handleMove("left");
+      } else if (["arrowright", "d"].includes(key)) {
+        handleMove("right");
+      }
+    });
+
+    document.querySelectorAll("[data-move]").forEach((button) => {
+      button.addEventListener("click", () => {
+        handleMove(button.dataset.move);
+      });
+    });
+
+    document.getElementById("reset").addEventListener("click", resetState);
+    document.getElementById("undo").addEventListener("click", undo);
+
+    resetState();
+  </script>
+</body>
+</html>
